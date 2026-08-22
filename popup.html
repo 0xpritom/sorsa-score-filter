@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sorsa Score filter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-circle" style="font-weight: 800; font-size: 15px;">
+        S
+      </div>
+      <h1>Sorsa Score filter</h1>
+    </div>
+    <button id="themeToggle" class="theme-toggle-btn" aria-label="Toggle Theme" title="Toggle Light/Dark Mode">
+      <!-- Sun Icon for Light Mode -->
+      <svg id="sunIcon" style="display:none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      <!-- Moon Icon for Dark Mode -->
+      <svg id="moonIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </button>
+  </div>
+
+  <div class="container">
+    <div class="card shadow-sm">
+      <div class="form-group">
+        <label for="fileUpload">
+          <span class="step-num">1</span> Upload Data File
+          <span class="badge">.txt, .csv, .json</span>
+        </label>
+        <div class="file-drop-zone">
+          <input type="file" id="fileUpload" accept=".txt,.csv,.json">
+        </div>
+      </div>
+
+      <div class="divider">
+        <span>OR</span>
+      </div>
+
+      <div class="form-group mb-0">
+        <label for="usernameList">
+          <span class="step-num">2</span> Paste Usernames / X URLs
+        </label>
+        <textarea id="usernameList" rows="3" placeholder="e.g. https://x.com/elonmusk&#10;@MUDLARK_nft"></textarea>
+      </div>
+    </div>
+
+    <div class="card row-card shadow-sm border-accent">
+      <div class="form-group mb-0">
+        <label for="minScore">Min. Target Score</label>
+        <input type="number" id="minScore" value="0" min="0">
+      </div>
+      <button id="filterBtn" class="primary-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+        Filter Targets
+      </button>
+    </div>
+
+    <div id="status" class="status-msg">System ready. Awaiting input.</div>
+
+    <div class="card result-card shadow-sm">
+      <div class="result-header">
+        <label for="resultList">
+          <span class="pulse-dot"></span>
+        </label>
+        <button id="copyBtn" class="icon-btn" style="display: none;">Copy Results</button>
+      </div>
+      <textarea id="resultList" rows="4" readonly placeholder="High-value targets will appear here..."></textarea>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

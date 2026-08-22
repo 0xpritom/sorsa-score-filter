@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Sorsa Score filter",
+  "version": "1.0",
+  "description": "Filters a list of X (Twitter) usernames based on their Sorsa score.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.sorsa.io/*"
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

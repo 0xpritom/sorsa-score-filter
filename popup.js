@@ -1,0 +1,240 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const themeToggle = document.getElementById('themeToggle');
+  const sunIcon = document.getElementById('sunIcon');
+  const moonIcon = document.getElementById('moonIcon');
+
+  // Load theme preference
+  if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-theme');
+    sunIcon.style.display = 'block';
+    moonIcon.style.display = 'none';
+  } else {
+    sunIcon.style.display = 'none';
+    moonIcon.style.display = 'block';
+  }
+
+  themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('light-theme');
+    if (document.body.classList.contains('light-theme')) {
+      localStorage.setItem('theme', 'light');
+      sunIcon.style.display = 'block';
+      moonIcon.style.display = 'none';
+    } else {
+      localStorage.setItem('theme', 'dark');
+      sunIcon.style.display = 'none';
+      moonIcon.style.display = 'block';
+    }
+  });
+
+  const filterBtn = document.getElementById('filterBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const usernameListInput = document.getElementById('usernameList');
+  const minScoreInput = document.getElementById('minScore');
+  const resultListOutput = document.getElementById('resultList');
+  const statusEl = document.getElementById('status');
+  const fileUpload = document.getElementById('fileUpload');
+
+  fileUpload.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target.result;
+      
+      if (file.name.endsWith('.json')) {
+        try {
+          const parsed = JSON.parse(content);
+          const extractStrings = (obj) => {
+            let strings = [];
+            if (typeof obj === 'string') {
+              strings.push(obj);
+            } else if (Array.isArray(obj)) {
+              obj.forEach(item => strings = strings.concat(extractStrings(item)));
+            } else if (typeof obj === 'object' && obj !== null) {
+              Object.values(obj).forEach(val => strings = strings.concat(extractStrings(val)));
+            }
+            return strings;
+          };
+          usernameListInput.value = extractStrings(parsed).join('\n');
+        } catch (err) {
+          usernameListInput.value = content; // Fallback to raw text
+        }
+      } else if (file.name.endsWith('.csv')) {
+        try {
+          const lines = content.split(/\r?\n/);
+          if (lines.length > 0) {
+            const delimiter = lines[0].includes('\t') ? '\t' : ',';
+            const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase().replace(/["']/g, ''));
+            const usernameIndex = headers.findIndex(h => h === 'username' || h === 'screen_name' || h === 'handle');
+            
+            if (usernameIndex !== -1) {
+              const extracted = [];
+              const parseCSVLine = (line) => {
+                const result = [];
+                let curr = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                  if (line[i] === '"') inQuotes = !inQuotes;
+                  else if (line[i] === delimiter && !inQuotes) {
+                    result.push(curr);
+                    curr = '';
+                  } else {
+                    curr += line[i];
+                  }
+                }
+                result.push(curr);
+                return result;
+              };
+
+              for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                const cols = parseCSVLine(lines[i]);
+                if (cols.length > usernameIndex) {
+                  let username = cols[usernameIndex].trim().replace(/["']/g, '').replace(/^@/, '');
+                  if (username) extracted.push(username);
+                }
+              }
+
+              if (extracted.length > 0) {
+                usernameListInput.value = extracted.join('\n');
+              } else {
+                usernameListInput.value = content; // Fallback if empty column
+              }
+            } else {
+              usernameListInput.value = content; // Fallback if no header found
+            }
+          }
+        } catch (err) {
+          usernameListInput.value = content;
+        }
+      } else {
+        usernameListInput.value = content;
+      }
+      
+      updateStatus(`File "${file.name}" loaded into Option 1.`);
+    };
+    reader.readAsText(file);
+  });
+
+  filterBtn.addEventListener('click', async () => {
+    const rawText = usernameListInput.value.trim();
+    if (!rawText) {
+      updateStatus('Please enter some usernames or links.');
+      return;
+    }
+
+    const minScore = parseInt(minScoreInput.value, 10);
+    if (isNaN(minScore)) {
+      updateStatus('Please enter a valid minimum score.');
+      return;
+    }
+
+    // Extract usernames from the raw text
+    const usernames = extractUsernames(rawText);
+    
+    if (usernames.length === 0) {
+      updateStatus('No valid X (Twitter) usernames found in the input.');
+      return;
+    }
+
+    filterBtn.disabled = true;
+    resultListOutput.value = '';
+    copyBtn.style.display = 'none';
+    statusEl.classList.add('scanning-active');
+    
+    let filteredUsernames = [];
+    let processed = 0;
+
+    for (const username of usernames) {
+      updateStatus(`Processing ${processed + 1} of ${usernames.length}: @${username}...`);
+      
+      try {
+        const response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ action: 'fetchScore', username: username }, resolve);
+        });
+
+        if (response && response.success) {
+          const score = response.score;
+          if (score !== null) {
+            console.log(`@${username} - Score: ${score}`);
+            updateStatus(`Scanned @${username} - Score: ${score}`); // Show live score
+            if (score >= minScore) {
+              filteredUsernames.push(`@${username} (Score: ${score})`);
+              // Update textarea live
+              resultListOutput.value = filteredUsernames.join('\n');
+            }
+          } else {
+            console.log(`@${username} - Score not found`);
+            updateStatus(`Scanned @${username} - Not Found`);
+          }
+        } else {
+          console.error(`Error processing @${username}:`, response?.error || 'Unknown error');
+          updateStatus(`Error scanning @${username}`);
+        }
+      } catch (err) {
+        console.error(`Failed to message background for @${username}`, err);
+      }
+      
+      processed++;
+      // Small delay to prevent hammering the server too fast
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    updateStatus(`Done! Found ${filteredUsernames.length} profile(s) with a score >= ${minScore}.`);
+    statusEl.classList.remove('scanning-active');
+    filterBtn.disabled = false;
+    
+    if (filteredUsernames.length > 0) {
+      copyBtn.style.display = 'block';
+    }
+  });
+
+  copyBtn.addEventListener('click', () => {
+    resultListOutput.select();
+    document.execCommand('copy');
+    const originalText = copyBtn.innerText;
+    copyBtn.innerText = 'Copied!';
+    setTimeout(() => {
+      copyBtn.innerText = originalText;
+    }, 2000);
+  });
+
+  function extractUsernames(text) {
+    const lines = text.split('\n');
+    const usernames = new Set();
+
+    lines.forEach(line => {
+      line = line.trim();
+      if (!line) return;
+
+      // Extract from URL (e.g., https://x.com/elonmusk or https://twitter.com/elonmusk)
+      const urlMatch = line.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]{1,15})/i);
+      if (urlMatch && urlMatch[1]) {
+        usernames.add(urlMatch[1]);
+        return;
+      }
+
+      // Extract if it starts with @ (e.g., @elonmusk)
+      if (line.startsWith('@')) {
+        const handleMatch = line.match(/@([a-zA-Z0-9_]{1,15})/);
+        if (handleMatch && handleMatch[1]) {
+          usernames.add(handleMatch[1]);
+          return;
+        }
+      }
+
+      // Otherwise assume the whole line is a username, stripping any weird chars just in case
+      const plainMatch = line.match(/^([a-zA-Z0-9_]{1,15})$/);
+      if (plainMatch && plainMatch[1]) {
+        usernames.add(plainMatch[1]);
+      }
+    });
+
+    return Array.from(usernames);
+  }
+
+  function updateStatus(message) {
+    statusEl.innerText = message;
+  }
+});
