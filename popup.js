@@ -28,11 +28,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const filterBtn = document.getElementById('filterBtn');
   const copyBtn = document.getElementById('copyBtn');
+  const downloadPdfBtn = document.getElementById('downloadPdfBtn');
   const usernameListInput = document.getElementById('usernameList');
   const minScoreInput = document.getElementById('minScore');
   const resultListOutput = document.getElementById('resultList');
   const statusEl = document.getElementById('status');
   const fileUpload = document.getElementById('fileUpload');
+
+  let currentFilteredTargets = [];
+
+  function updateStatus(msg) {
+    statusEl.innerText = msg;
+  }
 
   fileUpload.addEventListener('change', (event) => {
     const file = event.target.files[0];
@@ -119,28 +126,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   filterBtn.addEventListener('click', async () => {
     const rawText = usernameListInput.value.trim();
-    if (!rawText) {
-      updateStatus('Please enter some usernames or links.');
-      return;
-    }
-
     const minScore = parseInt(minScoreInput.value, 10);
+    
     if (isNaN(minScore)) {
       updateStatus('Please enter a valid minimum score.');
       return;
     }
 
-    // Extract usernames from the raw text
     const usernames = extractUsernames(rawText);
-    
     if (usernames.length === 0) {
-      updateStatus('No valid X (Twitter) usernames found in the input.');
+      updateStatus('Please enter some usernames or URLs first.');
       return;
     }
 
     filterBtn.disabled = true;
     resultListOutput.value = '';
     copyBtn.style.display = 'none';
+    downloadPdfBtn.style.display = 'none';
     statusEl.classList.add('scanning-active');
     
     let filteredUsernames = [];
@@ -148,7 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const username of usernames) {
       updateStatus(`Processing ${processed + 1} of ${usernames.length}: @${username}...`);
-      
       try {
         const response = await new Promise((resolve) => {
           chrome.runtime.sendMessage({ action: 'fetchScore', username: username }, resolve);
@@ -174,19 +175,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (err) {
         console.error(`Failed to message background for @${username}`, err);
+        updateStatus(`System error scanning @${username}`);
       }
       
       processed++;
-      // Small delay to prevent hammering the server too fast
+      // Add a small delay so we don't spam the UI or the background script too fast
       await new Promise(r => setTimeout(r, 500));
     }
+
+    currentFilteredTargets = filteredUsernames; // Save for PDF
 
     updateStatus(`Done! Found ${filteredUsernames.length} profile(s) with a score >= ${minScore}.`);
     statusEl.classList.remove('scanning-active');
     filterBtn.disabled = false;
     
     if (filteredUsernames.length > 0) {
-      copyBtn.style.display = 'block';
+      copyBtn.style.display = 'flex';
+      downloadPdfBtn.style.display = 'flex';
     }
   });
 
@@ -198,6 +203,31 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       copyBtn.innerText = originalText;
     }, 2000);
+  });
+
+  downloadPdfBtn.addEventListener('click', () => {
+    if (!window.jspdf) {
+      alert("PDF library is not loaded properly.");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    doc.setFontSize(16);
+    doc.text("Sorsa Filter - High Value Targets", 10, 15);
+    
+    doc.setFontSize(12);
+    let y = 30;
+    currentFilteredTargets.forEach(target => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(target, 10, y);
+      y += 8;
+    });
+    
+    doc.save("Sorsa_Targets.pdf");
   });
 
   function extractUsernames(text) {

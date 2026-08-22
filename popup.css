@@ -433,15 +433,25 @@ input[type="file"]::file-selector-button:hover {
 /* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
-  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-card); 
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color); 
+  background: rgba(156, 163, 175, 0.3);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #384252; 
+  background: rgba(156, 163, 175, 0.5);
+}
+
+/* Footer Credit */
+.footer-credit {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  opacity: 0.7;
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }

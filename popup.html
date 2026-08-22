@@ -67,12 +67,22 @@
         <label for="resultList">
           <span class="pulse-dot"></span>
         </label>
-        <button id="copyBtn" class="icon-btn" style="display: none;">Copy Results</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="downloadPdfBtn" class="icon-btn outline-btn" style="display: none;">Download PDF</button>
+          <button id="copyBtn" class="icon-btn" style="display: none;">Copy Results</button>
+        </div>
       </div>
       <textarea id="resultList" rows="4" readonly placeholder="High-value targets will appear here..."></textarea>
     </div>
+
+    <!-- Developer Credit -->
+    <div class="footer-credit">
+      &copy; 2026 All Rights Reserved by Pritom
+    </div>
+
   </div>
-  
+
+  <script src="jspdf.min.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
