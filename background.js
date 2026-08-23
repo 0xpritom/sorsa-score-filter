@@ -1,13 +1,75 @@
+let currentJob = {
+  status: 'idle', // idle | running | done
+  usernames: [],
+  minScore: 0,
+  filteredUsernames: [],
+  processedCount: 0,
+  totalCount: 0,
+  message: ''
+};
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'fetchScore') {
-    fetchScore(request.username)
-      .then(score => sendResponse({ success: true, score: score }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+  if (request.action === 'startJob') {
+    if (currentJob.status === 'running') {
+      sendResponse({ success: false, error: 'Job already running' });
+      return;
+    }
     
-    // Return true to indicate we will send a response asynchronously
+    currentJob = {
+      status: 'running',
+      usernames: request.usernames,
+      minScore: request.minScore,
+      filteredUsernames: [],
+      processedCount: 0,
+      totalCount: request.usernames.length,
+      message: 'Starting scan...'
+    };
+    
+    // Start processing asynchronously
+    processJob();
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  if (request.action === 'getJobStatus') {
+    sendResponse(currentJob);
     return true;
   }
 });
+
+async function processJob() {
+  const usernames = currentJob.usernames;
+  const minScore = currentJob.minScore;
+  
+  for (const username of usernames) {
+    if (currentJob.status !== 'running') break; // Allow manual abort if implemented later
+    
+    currentJob.message = `Processing ${currentJob.processedCount + 1} of ${currentJob.totalCount}: @${username}...`;
+    
+    try {
+      const score = await fetchScore(username);
+      if (score !== null) {
+        console.log(`@${username} - Score: ${score}`);
+        currentJob.message = `Scanned @${username} - Score: ${score}`;
+        if (score >= minScore) {
+          currentJob.filteredUsernames.push(`@${username} (Score: ${score})`);
+        }
+      } else {
+        console.log(`@${username} - Score not found`);
+        currentJob.message = `Scanned @${username} - Not Found`;
+      }
+    } catch (err) {
+      console.error(`Error processing @${username}:`, err);
+      currentJob.message = `System error scanning @${username}`;
+    }
+    
+    currentJob.processedCount++;
+    await new Promise(r => setTimeout(r, 500)); // Rate limit prevention
+  }
+  
+  currentJob.status = 'done';
+  currentJob.message = `Done! Found ${currentJob.filteredUsernames.length} profile(s) with a score >= ${minScore}.`;
+}
 
 async function fetchScore(username) {
   try {

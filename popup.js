@@ -124,7 +124,61 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.readAsText(file);
   });
 
-  filterBtn.addEventListener('click', async () => {
+  let statusInterval = null;
+
+  // Sync UI on load
+  chrome.runtime.sendMessage({ action: 'getJobStatus' }, (job) => {
+    if (job && (job.status === 'running' || job.status === 'done')) {
+      syncUI(job);
+      if (job.status === 'running') {
+        startPolling();
+      }
+    }
+  });
+
+  function syncUI(job) {
+    if (job.message) updateStatus(job.message);
+    
+    // Only update textarea if it's different to prevent resetting selection
+    const newText = job.filteredUsernames.join('\n');
+    if (resultListOutput.value !== newText) {
+      resultListOutput.value = newText;
+    }
+    
+    currentFilteredTargets = job.filteredUsernames;
+    
+    if (job.status === 'running') {
+      filterBtn.disabled = true;
+      copyBtn.style.display = 'none';
+      downloadPdfBtn.style.display = 'none';
+      statusEl.classList.add('scanning-active');
+    } else if (job.status === 'done') {
+      statusEl.classList.remove('scanning-active');
+      filterBtn.disabled = false;
+      if (job.filteredUsernames.length > 0) {
+        copyBtn.style.display = 'flex';
+        downloadPdfBtn.style.display = 'flex';
+      } else {
+        copyBtn.style.display = 'none';
+        downloadPdfBtn.style.display = 'none';
+      }
+    }
+  }
+
+  function startPolling() {
+    if (statusInterval) clearInterval(statusInterval);
+    statusInterval = setInterval(() => {
+      chrome.runtime.sendMessage({ action: 'getJobStatus' }, (job) => {
+        if (!job) return;
+        syncUI(job);
+        if (job.status !== 'running') {
+          clearInterval(statusInterval);
+        }
+      });
+    }, 500);
+  }
+
+  filterBtn.addEventListener('click', () => {
     const rawText = usernameListInput.value.trim();
     const minScore = parseInt(minScoreInput.value, 10);
     
@@ -139,60 +193,24 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    filterBtn.disabled = true;
-    resultListOutput.value = '';
-    copyBtn.style.display = 'none';
-    downloadPdfBtn.style.display = 'none';
-    statusEl.classList.add('scanning-active');
-    
-    let filteredUsernames = [];
-    let processed = 0;
-
-    for (const username of usernames) {
-      updateStatus(`Processing ${processed + 1} of ${usernames.length}: @${username}...`);
-      try {
-        const response = await new Promise((resolve) => {
-          chrome.runtime.sendMessage({ action: 'fetchScore', username: username }, resolve);
-        });
-
-        if (response && response.success) {
-          const score = response.score;
-          if (score !== null) {
-            console.log(`@${username} - Score: ${score}`);
-            updateStatus(`Scanned @${username} - Score: ${score}`); // Show live score
-            if (score >= minScore) {
-              filteredUsernames.push(`@${username} (Score: ${score})`);
-              // Update textarea live
-              resultListOutput.value = filteredUsernames.join('\n');
-            }
-          } else {
-            console.log(`@${username} - Score not found`);
-            updateStatus(`Scanned @${username} - Not Found`);
-          }
-        } else {
-          console.error(`Error processing @${username}:`, response?.error || 'Unknown error');
-          updateStatus(`Error scanning @${username}`);
-        }
-      } catch (err) {
-        console.error(`Failed to message background for @${username}`, err);
-        updateStatus(`System error scanning @${username}`);
+    // Start job in background
+    chrome.runtime.sendMessage({ 
+      action: 'startJob', 
+      usernames: Array.from(usernames),
+      minScore: minScore 
+    }, (res) => {
+      if (res && res.success) {
+        filterBtn.disabled = true;
+        resultListOutput.value = '';
+        copyBtn.style.display = 'none';
+        downloadPdfBtn.style.display = 'none';
+        statusEl.classList.add('scanning-active');
+        updateStatus('Starting scan...');
+        startPolling();
+      } else if (res && res.error) {
+        updateStatus('Error: ' + res.error);
       }
-      
-      processed++;
-      // Add a small delay so we don't spam the UI or the background script too fast
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    currentFilteredTargets = filteredUsernames; // Save for PDF
-
-    updateStatus(`Done! Found ${filteredUsernames.length} profile(s) with a score >= ${minScore}.`);
-    statusEl.classList.remove('scanning-active');
-    filterBtn.disabled = false;
-    
-    if (filteredUsernames.length > 0) {
-      copyBtn.style.display = 'flex';
-      downloadPdfBtn.style.display = 'flex';
-    }
+    });
   });
 
   copyBtn.addEventListener('click', () => {
