@@ -158,9 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
       downloadPdfBtn.style.display = 'none';
       statusEl.classList.add('scanning-active');
     } else if (job.status === 'done' || job.status === 'stopped') {
-      filterBtn.style.display = 'none';
+      filterBtn.style.display = 'flex';
       stopBtn.style.display = 'none';
       resetBtn.style.display = 'flex';
+      filterBtn.disabled = false;
       resetBtn.disabled = false;
       statusEl.classList.remove('scanning-active');
       if (job.filteredUsernames.length > 0) {
