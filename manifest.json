@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Sorsa Score filter",
+  "name": "Sorsa with Influencers Filter",
   "version": "1.0",
   "description": "Filters a list of X (Twitter) usernames based on their Sorsa score.",
   "action": {
