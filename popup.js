@@ -149,7 +149,9 @@ document.addEventListener('DOMContentLoaded', () => {
     currentFilteredTargets = job.filteredUsernames;
     
     if (job.status === 'running') {
-      filterBtn.disabled = true;
+      filterBtn.style.display = 'none';
+      stopBtn.style.display = 'flex';
+      stopBtn.disabled = false;
       copyBtn.style.display = 'none';
       downloadPdfBtn.style.display = 'none';
       statusEl.classList.add('scanning-active');
@@ -210,7 +212,9 @@ document.addEventListener('DOMContentLoaded', () => {
       minScore: minScore 
     }, (res) => {
       if (res && res.success) {
-        filterBtn.disabled = true;
+        filterBtn.style.display = 'none';
+        stopBtn.style.display = 'flex';
+        stopBtn.disabled = false;
         resultListOutput.value = '';
         copyBtn.style.display = 'none';
         downloadPdfBtn.style.display = 'none';
