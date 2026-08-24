@@ -35,6 +35,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse(currentJob);
     return true;
   }
+  
+  if (request.action === 'stopJob') {
+    if (currentJob.status === 'running') {
+      currentJob.status = 'stopped';
+    }
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 async function processJob() {
@@ -69,8 +77,12 @@ async function processJob() {
     await new Promise(r => setTimeout(r, 500)); // Rate limit prevention
   }
   
-  currentJob.status = 'done';
-  currentJob.message = `Done! Found ${currentJob.filteredUsernames.length} profile(s) with a score >= ${minScore}.`;
+  if (currentJob.status === 'stopped') {
+    currentJob.message = `Scan stopped early! Found ${currentJob.filteredUsernames.length} profile(s).`;
+  } else {
+    currentJob.status = 'done';
+    currentJob.message = `Done! Found ${currentJob.filteredUsernames.length} profile(s) with a score >= ${minScore}.`;
+  }
 }
 
 async function fetchScore(username) {

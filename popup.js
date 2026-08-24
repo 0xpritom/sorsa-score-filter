@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const filterBtn = document.getElementById('filterBtn');
+  const stopBtn = document.getElementById('stopBtn');
   const copyBtn = document.getElementById('copyBtn');
   const downloadPdfBtn = document.getElementById('downloadPdfBtn');
   const usernameListInput = document.getElementById('usernameList');
@@ -128,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Sync UI on load
   chrome.runtime.sendMessage({ action: 'getJobStatus' }, (job) => {
-    if (job && (job.status === 'running' || job.status === 'done')) {
+    if (job && (job.status === 'running' || job.status === 'done' || job.status === 'stopped')) {
       syncUI(job);
       if (job.status === 'running') {
         startPolling();
@@ -152,7 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
       copyBtn.style.display = 'none';
       downloadPdfBtn.style.display = 'none';
       statusEl.classList.add('scanning-active');
-    } else if (job.status === 'done') {
+    } else if (job.status === 'done' || job.status === 'stopped') {
+      filterBtn.style.display = 'flex';
+      stopBtn.style.display = 'none';
+      filterBtn.disabled = false;
       statusEl.classList.remove('scanning-active');
       filterBtn.disabled = false;
       if (job.filteredUsernames.length > 0) {
@@ -177,6 +181,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }, 500);
   }
+
+  stopBtn.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'stopJob' });
+    stopBtn.disabled = true;
+    updateStatus('Stopping scan...');
+  });
 
   filterBtn.addEventListener('click', () => {
     const rawText = usernameListInput.value.trim();
