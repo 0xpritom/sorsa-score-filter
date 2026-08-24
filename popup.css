@@ -44,7 +44,7 @@ body.light-theme .logo-circle {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  width: 360px;
+  width: 400px;
   margin: 0;
   padding: 0;
   background-color: var(--bg-main);
@@ -147,7 +147,7 @@ body {
 }
 
 .row-card .form-group {
-  flex: 0.8;
+  flex: 1;
 }
 
 .form-group {
@@ -302,7 +302,8 @@ input[type="file"]::file-selector-button:hover {
   background: var(--primary-grad);
   color: white;
   border: none;
-  padding: 8px 14px;
+  padding: 8px 12px;
+  white-space: nowrap;
   border-radius: 6px;
   font-family: 'Inter', sans-serif;
   font-weight: 700;
