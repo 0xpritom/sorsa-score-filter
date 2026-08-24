@@ -152,16 +152,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (job.status === 'running') {
       filterBtn.style.display = 'none';
       stopBtn.style.display = 'flex';
+      resetBtn.style.display = 'none';
       stopBtn.disabled = false;
       copyBtn.style.display = 'none';
       downloadPdfBtn.style.display = 'none';
       statusEl.classList.add('scanning-active');
     } else if (job.status === 'done' || job.status === 'stopped') {
-      filterBtn.style.display = 'flex';
+      filterBtn.style.display = 'none';
       stopBtn.style.display = 'none';
-      filterBtn.disabled = false;
+      resetBtn.style.display = 'flex';
+      resetBtn.disabled = false;
       statusEl.classList.remove('scanning-active');
-      filterBtn.disabled = false;
       if (job.filteredUsernames.length > 0) {
         copyBtn.style.display = 'flex';
         downloadPdfBtn.style.display = 'flex';
@@ -169,6 +170,15 @@ document.addEventListener('DOMContentLoaded', () => {
         copyBtn.style.display = 'none';
         downloadPdfBtn.style.display = 'none';
       }
+    } else if (job.status === 'idle') {
+      filterBtn.style.display = 'flex';
+      stopBtn.style.display = 'none';
+      resetBtn.style.display = 'none';
+      filterBtn.disabled = false;
+      copyBtn.style.display = 'none';
+      downloadPdfBtn.style.display = 'none';
+      statusEl.classList.remove('scanning-active');
+      updateStatus('System ready. Awaiting input.');
     }
   }
 
