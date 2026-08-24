@@ -241,7 +241,9 @@ document.addEventListener('DOMContentLoaded', () => {
         doc.addPage();
         y = 20;
       }
-      doc.text(target, 10, y);
+      // jsPDF default font does not support emojis, so we strip the blue circle but keep the text
+      const cleanTarget = target.replace('🔵', '').trim();
+      doc.text(cleanTarget, 10, y);
       y += 8;
     });
     

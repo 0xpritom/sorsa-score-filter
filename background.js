@@ -47,12 +47,14 @@ async function processJob() {
     currentJob.message = `Processing ${currentJob.processedCount + 1} of ${currentJob.totalCount}: @${username}...`;
     
     try {
-      const score = await fetchScore(username);
-      if (score !== null) {
-        console.log(`@${username} - Score: ${score}`);
+      const resultObj = await fetchScore(username);
+      if (resultObj !== null) {
+        const { score, isInfluencer } = resultObj;
+        console.log(`@${username} - Score: ${score}, Influencer: ${isInfluencer}`);
         currentJob.message = `Scanned @${username} - Score: ${score}`;
         if (score >= minScore) {
-          currentJob.filteredUsernames.push(`@${username} (Score: ${score})`);
+          const tag = isInfluencer ? ' 🔵 [Influencer]' : '';
+          currentJob.filteredUsernames.push(`@${username} (Score: ${score})${tag}`);
         }
       } else {
         console.log(`@${username} - Score not found`);
@@ -87,29 +89,33 @@ async function fetchScore(username) {
     }
 
     const html = await response.text();
+    let score = null;
+    
+    const isInfluencer = /\\"category\\":\s*\\"influencer\\"/i.test(html) || /\\"tags\\":\s*\[[^\]]*\\"Influencer\\"/i.test(html);
     
     // Attempt 1: Extract from Next.js internal JSON state (most accurate, bypasses UI caching)
     const jsonMatch = html.match(/\\"score_value\\":([\d.]+)/);
     if (jsonMatch && jsonMatch[1]) {
-      return Math.round(parseFloat(jsonMatch[1]));
-    }
-    
-    // Attempt 2: Extract from Next.js HTML response.
-    const regex = /class="[^"]*profileScoreStats[^"]*">([\d,]+)</;
-    const match = html.match(regex);
-    if (match && match[1]) {
-      const scoreString = match[1].replace(/,/g, '');
-      return parseInt(scoreString, 10);
-    }
-    
-    // Fallback 3: Check if it's inside a different structure
-    const regexFallback = /class="[^"]*styles_scoreValue[^"]*">([\d,]+)</;
-    const matchFallback = html.match(regexFallback);
-    if (matchFallback && matchFallback[1]) {
-      const scoreString = matchFallback[1].replace(/,/g, '');
-      return parseInt(scoreString, 10);
+      score = Math.round(parseFloat(jsonMatch[1]));
+    } else {
+      // Attempt 2: Extract from Next.js HTML response.
+      const regex = /class="[^"]*profileScoreStats[^"]*">([\d,]+)</;
+      const match = html.match(regex);
+      if (match && match[1]) {
+        score = parseInt(match[1].replace(/,/g, ''), 10);
+      } else {
+        // Fallback 3: Check if it's inside a different structure
+        const regexFallback = /class="[^"]*styles_scoreValue[^"]*">([\d,]+)</;
+        const matchFallback = html.match(regexFallback);
+        if (matchFallback && matchFallback[1]) {
+          score = parseInt(matchFallback[1].replace(/,/g, ''), 10);
+        }
+      }
     }
 
+    if (score !== null) {
+      return { score, isInfluencer };
+    }
     return null; // Score not found on the page
   } catch (error) {
     console.error(`Error fetching score for ${username}:`, error);
