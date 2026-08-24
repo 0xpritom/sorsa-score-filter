@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const filterBtn = document.getElementById('filterBtn');
   const stopBtn = document.getElementById('stopBtn');
+  const resetBtn = document.getElementById('resetBtn');
   const copyBtn = document.getElementById('copyBtn');
   const downloadPdfBtn = document.getElementById('downloadPdfBtn');
   const usernameListInput = document.getElementById('usernameList');
@@ -188,6 +189,16 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ action: 'stopJob' });
     stopBtn.disabled = true;
     updateStatus('Stopping scan...');
+  });
+
+  resetBtn.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'resetJob' }, () => {
+      // Clear inputs
+      usernameListInput.value = '';
+      resultListOutput.value = '';
+      currentFilteredTargets = [];
+      syncUI({ status: 'idle', filteredUsernames: [] });
+    });
   });
 
   filterBtn.addEventListener('click', () => {

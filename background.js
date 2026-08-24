@@ -1,5 +1,5 @@
 let currentJob = {
-  status: 'idle', // idle | running | done
+  status: 'idle', // idle | running | done | stopped
   usernames: [],
   minScore: 0,
   filteredUsernames: [],
@@ -7,6 +7,21 @@ let currentJob = {
   totalCount: 0,
   message: ''
 };
+let isProcessing = false;
+
+// Auto-resume if the service worker was terminated during a run
+chrome.storage.local.get(['sorsaJob'], (result) => {
+  if (result.sorsaJob) {
+    currentJob = result.sorsaJob;
+    if (currentJob.status === 'running' && !isProcessing) {
+      processJob();
+    }
+  }
+});
+
+async function saveState() {
+  await chrome.storage.local.set({ sorsaJob: currentJob });
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'startJob') {
@@ -25,9 +40,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       message: 'Starting scan...'
     };
     
-    // Start processing asynchronously
-    processJob();
-    sendResponse({ success: true });
+    saveState().then(() => {
+      processJob();
+      sendResponse({ success: true });
+    });
     return true;
   }
   
@@ -39,20 +55,44 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'stopJob') {
     if (currentJob.status === 'running') {
       currentJob.status = 'stopped';
+      saveState().then(() => sendResponse({ success: true }));
+    } else {
+      sendResponse({ success: true });
     }
-    sendResponse({ success: true });
+    return true;
+  }
+
+  if (request.action === 'resetJob') {
+    currentJob = {
+      status: 'idle',
+      usernames: [],
+      minScore: 0,
+      filteredUsernames: [],
+      processedCount: 0,
+      totalCount: 0,
+      message: ''
+    };
+    saveState().then(() => sendResponse({ success: true }));
     return true;
   }
 });
 
 async function processJob() {
+  if (isProcessing) return;
+  isProcessing = true;
+  
   const usernames = currentJob.usernames;
   const minScore = currentJob.minScore;
   
-  for (const username of usernames) {
-    if (currentJob.status !== 'running') break; // Allow manual abort if implemented later
+  for (let i = currentJob.processedCount; i < usernames.length; i++) {
+    if (currentJob.status !== 'running') {
+      isProcessing = false;
+      return; // Aborted
+    }
     
-    currentJob.message = `Processing ${currentJob.processedCount + 1} of ${currentJob.totalCount}: @${username}...`;
+    const username = usernames[i];
+    currentJob.message = `Processing ${i + 1} of ${currentJob.totalCount}: @${username}...`;
+    await saveState(); // Save before fetch
     
     try {
       const resultObj = await fetchScore(username);
@@ -73,16 +113,18 @@ async function processJob() {
       currentJob.message = `System error scanning @${username}`;
     }
     
-    currentJob.processedCount++;
+    currentJob.processedCount = i + 1;
+    await saveState();
     await new Promise(r => setTimeout(r, 500)); // Rate limit prevention
   }
   
-  if (currentJob.status === 'stopped') {
-    currentJob.message = `Scan stopped early! Found ${currentJob.filteredUsernames.length} profile(s).`;
-  } else {
+  if (currentJob.status === 'running') {
     currentJob.status = 'done';
     currentJob.message = `Done! Found ${currentJob.filteredUsernames.length} profile(s) with a score >= ${minScore}.`;
+    await saveState();
   }
+  
+  isProcessing = false;
 }
 
 async function fetchScore(username) {
