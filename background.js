@@ -9,14 +9,17 @@ let currentJob = {
 };
 let isProcessing = false;
 
-// Auto-resume if the service worker was terminated during a run
-chrome.storage.local.get(['sorsaJob'], (result) => {
-  if (result.sorsaJob) {
-    currentJob = result.sorsaJob;
-    if (currentJob.status === 'running' && !isProcessing) {
-      processJob();
+// Wait for state to load before handling any messages
+let stateLoadedPromise = new Promise((resolve) => {
+  chrome.storage.local.get(['sorsaJob'], (result) => {
+    if (result.sorsaJob) {
+      currentJob = result.sorsaJob;
+      if (currentJob.status === 'running' && !isProcessing) {
+        processJob();
+      }
     }
-  }
+    resolve();
+  });
 });
 
 async function saveState() {
@@ -24,6 +27,13 @@ async function saveState() {
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  stateLoadedPromise.then(() => {
+    handleMessage(request, sender, sendResponse);
+  });
+  return true; // Indicate we will respond asynchronously
+});
+
+function handleMessage(request, sender, sendResponse) {
   if (request.action === 'startJob') {
     if (currentJob.status === 'running') {
       sendResponse({ success: false, error: 'Job already running' });
@@ -73,9 +83,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       message: ''
     };
     saveState().then(() => sendResponse({ success: true }));
-    return true;
   }
-});
+}
 
 async function processJob() {
   if (isProcessing) return;
