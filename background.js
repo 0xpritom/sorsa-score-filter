@@ -9,6 +9,28 @@ let currentJob = {
 };
 let isProcessing = false;
 
+// Setup alarm for waking up the service worker if it gets suspended
+chrome.alarms.create('keepAliveAndResume', { periodInMinutes: 1 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAliveAndResume') {
+    stateLoadedPromise.then(() => {
+      if (currentJob.status === 'running' && !isProcessing) {
+        console.log("Alarm woke up service worker. Resuming job...");
+        processJob();
+      }
+    });
+  }
+});
+
+// Also try to resume on extension startup/update
+chrome.runtime.onStartup.addListener(() => {
+  console.log("Extension started up, checking for pending jobs...");
+});
+chrome.runtime.onInstalled.addListener(() => {
+  console.log("Extension installed/updated, checking for pending jobs...");
+});
+
 // Wait for state to load before handling any messages
 let stateLoadedPromise = new Promise((resolve) => {
   chrome.storage.local.get(['sorsaJob'], (result) => {
@@ -94,6 +116,17 @@ async function processJob() {
   const minScore = currentJob.minScore;
   
   for (let i = currentJob.processedCount; i < usernames.length; i++) {
+    // Wait for internet connection
+    while (!navigator.onLine) {
+      if (currentJob.status !== 'running') {
+         isProcessing = false;
+         return; // Aborted
+      }
+      currentJob.message = `Network offline. Waiting for connection...`;
+      await saveState();
+      await new Promise(r => setTimeout(r, 3000)); // wait 3 seconds before checking again
+    }
+
     if (currentJob.status !== 'running') {
       isProcessing = false;
       return; // Aborted
@@ -103,23 +136,41 @@ async function processJob() {
     currentJob.message = `Processing ${i + 1} of ${currentJob.totalCount}: @${username}...`;
     await saveState(); // Save before fetch
     
-    try {
-      const resultObj = await fetchScore(username);
-      if (resultObj !== null) {
-        const { score, isInfluencer } = resultObj;
-        console.log(`@${username} - Score: ${score}, Influencer: ${isInfluencer}`);
-        currentJob.message = `Scanned @${username} - Score: ${score}`;
-        if (score >= minScore) {
-          const tag = isInfluencer ? ' 🔵 [Influencer]' : '';
-          currentJob.filteredUsernames.push(`@${username} (Score: ${score})${tag}`);
+    let success = false;
+    while (!success && currentJob.status === 'running') {
+      try {
+        const resultObj = await fetchScore(username);
+        if (resultObj !== null) {
+          const { score, isInfluencer } = resultObj;
+          console.log(`@${username} - Score: ${score}, Influencer: ${isInfluencer}`);
+          currentJob.message = `Scanned @${username} - Score: ${score}`;
+          if (score >= minScore) {
+            const tag = isInfluencer ? ' 🔵 [Influencer]' : '';
+            currentJob.filteredUsernames.push(`@${username} (Score: ${score})${tag}`);
+          }
+        } else {
+          console.log(`@${username} - Score not found`);
+          currentJob.message = `Scanned @${username} - Not Found`;
         }
-      } else {
-        console.log(`@${username} - Score not found`);
-        currentJob.message = `Scanned @${username} - Not Found`;
+        success = true; // Successfully processed
+      } catch (err) {
+        console.error(`Error processing @${username}:`, err);
+        // Check if it's likely a network error
+        if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+           currentJob.message = `Network error scanning @${username}. Retrying...`;
+           await saveState();
+           await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds before retrying
+        } else {
+           // It's a different error (e.g., 500 server error)
+           currentJob.message = `System error scanning @${username}`;
+           success = true; // Skip this user and move on
+        }
       }
-    } catch (err) {
-      console.error(`Error processing @${username}:`, err);
-      currentJob.message = `System error scanning @${username}`;
+    }
+    
+    if (currentJob.status !== 'running') {
+        isProcessing = false;
+        return; // Aborted during retry loop
     }
     
     currentJob.processedCount = i + 1;
