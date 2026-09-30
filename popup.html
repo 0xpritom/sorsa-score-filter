@@ -18,9 +18,7 @@
       <h1>Sorsa with Influencers Filter</h1>
     </div>
     <button id="themeToggle" class="theme-toggle-btn" aria-label="Toggle Theme" title="Toggle Light/Dark Mode">
-      <!-- Sun Icon for Light Mode -->
       <svg id="sunIcon" style="display:none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-      <!-- Moon Icon for Dark Mode -->
       <svg id="moonIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
     </button>
   </div>
@@ -33,7 +31,7 @@
           <span class="badge">.txt, .csv, .json</span>
         </label>
         <div class="file-drop-zone">
-          <input type="file" id="fileUpload" accept=".txt,.csv,.json">
+          <input type="file" id="fileUpload" accept=".txt,.csv,.json" multiple>
         </div>
       </div>
 
@@ -45,28 +43,34 @@
         <label for="usernameList">
           <span class="step-num">2</span> Paste Usernames / X URLs
         </label>
-        <textarea id="usernameList" rows="3" placeholder="e.g. https://x.com/elonmusk&#10;@MUDLARK_nft"></textarea>
+        <textarea id="usernameList" rows="3" placeholder="e.g. https://x.com/elonmusk&#10;@weismann77&#10;@cz_binance"></textarea>
       </div>
     </div>
 
-    <div class="card row-card shadow-sm border-accent">
-      <div class="form-group mb-0">
-        <label for="minScore">Min. Target Score</label>
-        <input type="number" id="minScore" value="0" min="0">
+    <div class="card row-card shadow-sm border-accent" style="flex-direction: column; align-items: stretch;">
+      <div style="display: flex; gap: 12px; align-items: flex-end;">
+        <div class="form-group mb-0" style="flex: 1;">
+          <label for="minScore">Min. Target Score</label>
+          <input type="number" id="minScore" value="0" min="0">
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button id="filterBtn" class="primary-btn" style="flex: 1;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            Filter Targets
+          </button>
+          <button id="stopBtn" class="primary-btn stop-btn" style="display: none; flex: 1;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
+            Stop Scan
+          </button>
+          <button id="resetBtn" class="primary-btn reset-btn" style="display: none; flex: 1;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            Reset
+          </button>
+        </div>
       </div>
-      <div style="display: flex; gap: 8px;">
-        <button id="filterBtn" class="primary-btn" style="flex: 1;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-          Filter Targets
-        </button>
-        <button id="stopBtn" class="primary-btn stop-btn" style="display: none; flex: 1;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
-          Stop Scan
-        </button>
-        <button id="resetBtn" class="primary-btn reset-btn" style="display: none; flex: 1;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
-          Reset
-        </button>
+      <div class="checkbox-group" style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+        <input type="checkbox" id="onlyInfluencers" style="accent-color: #044cfe; width: 15px; height: 15px; cursor: pointer;">
+        <label for="onlyInfluencers" style="font-size: 12px; color: var(--text-main); cursor: pointer; margin: 0;">Only show Influencers</label>
       </div>
     </div>
 
@@ -75,14 +79,15 @@
     <div class="card result-card shadow-sm">
       <div class="result-header">
         <label for="resultList">
-          <span class="pulse-dot"></span>
+          <span class="pulse-dot"></span> Filtered Targets
         </label>
         <div style="display: flex; gap: 8px;">
+          <button id="downloadCsvBtn" class="icon-btn outline-btn" style="display: none;">Download CSV</button>
           <button id="downloadPdfBtn" class="icon-btn outline-btn" style="display: none;">Download PDF</button>
           <button id="copyBtn" class="icon-btn" style="display: none;">Copy Results</button>
         </div>
       </div>
-      <textarea id="resultList" rows="4" readonly placeholder="High-value targets will appear here..."></textarea>
+      <textarea id="resultList" rows="5" readonly placeholder="Matching high-value targets will appear here in real-time..."></textarea>
     </div>
 
     <!-- Developer Credit -->

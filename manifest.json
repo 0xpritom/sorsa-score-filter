@@ -1,18 +1,30 @@
 {
   "manifest_version": 3,
   "name": "Sorsa with Influencers Filter",
-  "version": "1.0",
-  "description": "Filters a list of X (Twitter) usernames based on their Sorsa score.",
+  "version": "1.2",
+  "description": "Filters large lists of X (Twitter) usernames based on their Sorsa score with background persistence.",
   "action": {
     "default_popup": "popup.html"
   },
   "permissions": [
     "storage",
-    "alarms"
+    "unlimitedStorage",
+    "alarms",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
-    "*://*.sorsa.io/*"
+    "*://*.sorsa.io/*",
+    "*://*.twitterscore.io/*"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",

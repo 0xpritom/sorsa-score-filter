@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "origin", "operation": "remove" },
+        { "header": "sec-fetch-mode", "operation": "set", "value": "navigate" },
+        { "header": "sec-fetch-dest", "operation": "set", "value": "document" },
+        { "header": "sec-fetch-site", "operation": "set", "value": "same-origin" },
+        { "header": "referer", "operation": "set", "value": "https://twitterscore.io/" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://*.twitterscore.io/*",
+      "resourceTypes": ["xmlhttprequest", "other", "sub_frame", "main_frame"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "origin", "operation": "remove" },
+        { "header": "sec-fetch-mode", "operation": "set", "value": "navigate" },
+        { "header": "sec-fetch-dest", "operation": "set", "value": "document" },
+        { "header": "sec-fetch-site", "operation": "set", "value": "same-origin" },
+        { "header": "referer", "operation": "set", "value": "https://app.sorsa.io/" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://*.sorsa.io/*",
+      "resourceTypes": ["xmlhttprequest", "other", "sub_frame", "main_frame"]
+    }
+  }
+]

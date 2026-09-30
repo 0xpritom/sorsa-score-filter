@@ -2,6 +2,7 @@ let currentJob = {
   status: 'idle', // idle | running | done | stopped
   usernames: [],
   minScore: 0,
+  onlyInfluencers: false,
   filteredUsernames: [],
   processedCount: 0,
   totalCount: 0,
@@ -9,7 +10,7 @@ let currentJob = {
 };
 let isProcessing = false;
 
-// Setup alarm for waking up the service worker if it gets suspended
+// Setup alarms
 chrome.alarms.create('keepAliveAndResume', { periodInMinutes: 1 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -23,12 +24,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// Also try to resume on extension startup/update
 chrome.runtime.onStartup.addListener(() => {
-  console.log("Extension started up, checking for pending jobs...");
+  stateLoadedPromise.then(() => {
+    if (currentJob.status === 'running' && !isProcessing) {
+      processJob();
+    }
+  });
 });
+
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("Extension installed/updated, checking for pending jobs...");
+  stateLoadedPromise.then(() => {
+    if (currentJob.status === 'running' && !isProcessing) {
+      processJob();
+    }
+  });
 });
 
 // Wait for state to load before handling any messages
@@ -36,6 +45,9 @@ let stateLoadedPromise = new Promise((resolve) => {
   chrome.storage.local.get(['sorsaJob'], (result) => {
     if (result.sorsaJob) {
       currentJob = result.sorsaJob;
+      if (!Array.isArray(currentJob.filteredUsernames)) {
+        currentJob.filteredUsernames = [];
+      }
       if (currentJob.status === 'running' && !isProcessing) {
         processJob();
       }
@@ -52,29 +64,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   stateLoadedPromise.then(() => {
     handleMessage(request, sender, sendResponse);
   });
-  return true; // Indicate we will respond asynchronously
+  return true;
 });
 
 function handleMessage(request, sender, sendResponse) {
   if (request.action === 'startJob') {
-    if (currentJob.status === 'running') {
-      sendResponse({ success: false, error: 'Job already running' });
-      return;
-    }
+    isProcessing = false;
     
     currentJob = {
       status: 'running',
-      usernames: request.usernames,
-      minScore: request.minScore,
+      usernames: request.usernames || [],
+      minScore: request.minScore !== undefined ? request.minScore : 0,
+      onlyInfluencers: request.onlyInfluencers || false,
       filteredUsernames: [],
       processedCount: 0,
-      totalCount: request.usernames.length,
+      totalCount: (request.usernames && request.usernames.length) || 0,
       message: 'Starting scan...'
     };
     
     saveState().then(() => {
       processJob();
-      sendResponse({ success: true });
+      sendResponse({ success: true, totalCount: currentJob.totalCount });
     });
     return true;
   }
@@ -85,8 +95,10 @@ function handleMessage(request, sender, sendResponse) {
   }
   
   if (request.action === 'stopJob') {
+    isProcessing = false;
     if (currentJob.status === 'running') {
       currentJob.status = 'stopped';
+      currentJob.message = `Scan stopped at ${currentJob.processedCount} of ${currentJob.totalCount}.`;
       saveState().then(() => sendResponse({ success: true }));
     } else {
       sendResponse({ success: true });
@@ -95,16 +107,19 @@ function handleMessage(request, sender, sendResponse) {
   }
 
   if (request.action === 'resetJob') {
+    isProcessing = false;
     currentJob = {
       status: 'idle',
       usernames: [],
       minScore: 0,
+      onlyInfluencers: false,
       filteredUsernames: [],
       processedCount: 0,
       totalCount: 0,
       message: ''
     };
     saveState().then(() => sendResponse({ success: true }));
+    return true;
   }
 }
 
@@ -114,27 +129,34 @@ async function processJob() {
   
   const usernames = currentJob.usernames;
   const minScore = currentJob.minScore;
+  const onlyInfluencers = currentJob.onlyInfluencers;
   
   for (let i = currentJob.processedCount; i < usernames.length; i++) {
-    // Wait for internet connection
+    // Wait for internet connection if offline
     while (!navigator.onLine) {
       if (currentJob.status !== 'running') {
-         isProcessing = false;
-         return; // Aborted
+        isProcessing = false;
+        return;
       }
       currentJob.message = `Network offline. Waiting for connection...`;
       await saveState();
-      await new Promise(r => setTimeout(r, 3000)); // wait 3 seconds before checking again
+      await new Promise(r => setTimeout(r, 3000));
     }
 
     if (currentJob.status !== 'running') {
       isProcessing = false;
-      return; // Aborted
+      return;
     }
     
-    const username = usernames[i];
+    const rawUsername = usernames[i];
+    const username = (typeof rawUsername === 'string' ? rawUsername : '').replace(/^@/, '').trim();
+    if (!username) {
+      currentJob.processedCount = i + 1;
+      continue;
+    }
+
     currentJob.message = `Processing ${i + 1} of ${currentJob.totalCount}: @${username}...`;
-    await saveState(); // Save before fetch
+    await saveState();
     
     let success = false;
     while (!success && currentJob.status === 'running') {
@@ -142,40 +164,46 @@ async function processJob() {
         const resultObj = await fetchScore(username);
         if (resultObj !== null) {
           const { score, isInfluencer } = resultObj;
-          console.log(`@${username} - Score: ${score}, Influencer: ${isInfluencer}`);
           currentJob.message = `Scanned @${username} - Score: ${score}`;
-          if (score >= minScore) {
+          
+          let passesFilter = true;
+          if (score < minScore) passesFilter = false;
+          if (onlyInfluencers && !isInfluencer) passesFilter = false;
+          
+          if (passesFilter) {
             const tag = isInfluencer ? ' 🔵 [Influencer]' : '';
-            currentJob.filteredUsernames.push(`@${username} (Score: ${score})${tag}`);
+            const entry = `@${username} (Score: ${score})${tag}`;
+            if (!currentJob.filteredUsernames.some(u => u.startsWith(`@${username} `) || u === `@${username}`)) {
+              currentJob.filteredUsernames.push(entry);
+            }
           }
         } else {
-          console.log(`@${username} - Score not found`);
-          currentJob.message = `Scanned @${username} - Not Found`;
+          currentJob.message = `Scanned @${username} - Score Not Found`;
         }
-        success = true; // Successfully processed
+        success = true;
       } catch (err) {
         console.error(`Error processing @${username}:`, err);
-        // Check if it's likely a network error
-        if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-           currentJob.message = `Network error scanning @${username}. Retrying...`;
-           await saveState();
-           await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds before retrying
+        if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('429') || err.message.includes('403')) {
+          currentJob.message = `Rate-limited/verification on @${username}. Retrying in 4s...`;
+          await saveState();
+          await new Promise(r => setTimeout(r, 4000));
         } else {
-           // It's a different error (e.g., 500 server error)
-           currentJob.message = `System error scanning @${username}`;
-           success = true; // Skip this user and move on
+          currentJob.message = `System error on @${username}`;
+          success = true;
         }
       }
     }
     
     if (currentJob.status !== 'running') {
-        isProcessing = false;
-        return; // Aborted during retry loop
+      isProcessing = false;
+      return;
     }
     
     currentJob.processedCount = i + 1;
     await saveState();
-    await new Promise(r => setTimeout(r, 500)); // Rate limit prevention
+    
+    // 500ms delay between requests for stable rate limits
+    await new Promise(r => setTimeout(r, 500));
   }
   
   if (currentJob.status === 'running') {
@@ -189,48 +217,98 @@ async function processJob() {
 
 async function fetchScore(username) {
   try {
-    const response = await fetch(`https://app.sorsa.io/profile/${username}`, {
-      credentials: 'omit', // Force unauthenticated request to ensure we get SSR HTML with the score
+    let response = await fetch(`https://twitterscore.io/twitter/${encodeURIComponent(username)}/`, {
+      credentials: 'include',
       headers: {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
       }
     });
 
     if (!response.ok) {
-      if (response.status === 404) return null; // User not found
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const html = await response.text();
-    let score = null;
-    
-    const isInfluencer = /\\"category\\":\s*\\"influencer\\"/i.test(html) || /\\"tags\\":\s*\[[^\]]*\\"Influencer\\"/i.test(html);
-    
-    // Attempt 1: Extract from Next.js internal JSON state (most accurate, bypasses UI caching)
-    const jsonMatch = html.match(/\\"score_value\\":([\d.]+)/);
-    if (jsonMatch && jsonMatch[1]) {
-      score = Math.round(parseFloat(jsonMatch[1]));
-    } else {
-      // Attempt 2: Extract from Next.js HTML response.
-      const regex = /class="[^"]*profileScoreStats[^"]*">([\d,]+)</;
-      const match = html.match(regex);
-      if (match && match[1]) {
-        score = parseInt(match[1].replace(/,/g, ''), 10);
-      } else {
-        // Fallback 3: Check if it's inside a different structure
-        const regexFallback = /class="[^"]*styles_scoreValue[^"]*">([\d,]+)</;
-        const matchFallback = html.match(regexFallback);
-        if (matchFallback && matchFallback[1]) {
-          score = parseInt(matchFallback[1].replace(/,/g, ''), 10);
+      if (response.status === 404) return null;
+      if (response.status === 429 || response.status === 403) {
+        throw new Error(`HTTP ${response.status} Challenge`);
+      }
+      
+      // Fallback to app.sorsa.io
+      response = await fetch(`https://app.sorsa.io/profile/${encodeURIComponent(username)}`, {
+        credentials: 'include',
+        headers: {
+          'x-from': 'extension',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
         }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        if (response.status === 429 || response.status === 403) {
+          throw new Error(`HTTP ${response.status} Challenge`);
+        }
+        return null;
       }
     }
 
-    if (score !== null) {
-      return { score, isInfluencer };
+    const html = await response.text();
+    if (!html) return null;
+
+    let score = null;
+    let isInfluencer = false;
+
+    // 1. OpenGraph Meta Tags
+    const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+                    html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+    if (ogTitle) {
+      const m = ogTitle[1].match(/Score\s+([\d,.]+)/i);
+      if (m) score = parseFloat(m[1].replace(/,/g, ''));
     }
-    return null; // Score not found on the page
+
+    if (score === null) {
+      const ogDesc = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+                     html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+      if (ogDesc) {
+        const m = ogDesc[1].match(/Score\s+(?:of\s+)?([\d,.]+)/i);
+        if (m) score = parseFloat(m[1].replace(/,/g, ''));
+      }
+    }
+
+    // Twitter meta fallback
+    if (score === null) {
+      const twTitle = html.match(/<meta[^>]*name=["']twitter:title["'][^>]*content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:title["']/i);
+      if (twTitle) {
+        const m = twTitle[1].match(/Score\s+([\d,.]+)/i);
+        if (m) score = parseFloat(m[1].replace(/,/g, ''));
+      }
+    }
+
+    // 2. Next.js JSON State
+    if (score === null) {
+      const jsonMatch = html.match(/"score_value":\s*([\d.]+)/) || 
+                        html.match(/\\"score_value\\":\s*([\d.]+)/) ||
+                        html.match(/"score":\s*([\d.]+)/);
+      if (jsonMatch) score = parseFloat(jsonMatch[1]);
+    }
+
+    // 3. HTML Class
+    if (score === null) {
+      const classMatch = html.match(/class=["'][^"']*profileScoreStats[^"']*["']>([\d,.]+)</i) ||
+                         html.match(/class=["'][^"']*styles_scoreValue[^"']*["']>([\d,.]+)</i);
+      if (classMatch) score = parseFloat(classMatch[1].replace(/,/g, ''));
+    }
+
+    // Influencer Detection
+    if (/Category[\s\S]{1,100}Influencer/i.test(html) ||
+        /"category":\s*"influencer"/i.test(html) ||
+        /\\"category\\":\s*\\"influencer\\"/i.test(html) ||
+        /"tags":\s*\[[^\]]*"Influencer"/i.test(html) ||
+        /class="[^"]*badge[^"]*"[^>]*>\s*Influencer/i.test(html)) {
+      isInfluencer = true;
+    }
+
+    if (score !== null) {
+      return { score: Number(score.toFixed(2)), isInfluencer };
+    }
+    return null;
   } catch (error) {
     console.error(`Error fetching score for ${username}:`, error);
     throw error;
