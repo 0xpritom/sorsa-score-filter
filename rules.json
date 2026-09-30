@@ -10,6 +10,9 @@
         { "header": "sec-fetch-dest", "operation": "set", "value": "document" },
         { "header": "sec-fetch-site", "operation": "set", "value": "same-origin" },
         { "header": "referer", "operation": "set", "value": "https://twitterscore.io/" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
       ]
     },
     "condition": {
@@ -28,6 +31,9 @@
         { "header": "sec-fetch-dest", "operation": "set", "value": "document" },
         { "header": "sec-fetch-site", "operation": "set", "value": "same-origin" },
         { "header": "referer", "operation": "set", "value": "https://app.sorsa.io/" }
+      ],
+      "responseHeaders": [
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
       ]
     },
     "condition": {

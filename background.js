@@ -158,8 +158,11 @@ async function processJob() {
     currentJob.message = `Processing ${i + 1} of ${currentJob.totalCount}: @${username}...`;
     await saveState();
     
+    let attempts = 0;
     let success = false;
-    while (!success && currentJob.status === 'running') {
+
+    while (!success && attempts < 2 && currentJob.status === 'running') {
+      attempts++;
       try {
         const resultObj = await fetchScore(username);
         if (resultObj !== null) {
@@ -183,13 +186,13 @@ async function processJob() {
         success = true;
       } catch (err) {
         console.error(`Error processing @${username}:`, err);
-        if (!navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('NetworkError') || err.message.includes('429') || err.message.includes('403')) {
-          currentJob.message = `Rate-limited/verification on @${username}. Retrying in 4s...`;
+        if (attempts < 2) {
+          currentJob.message = `Retrying @${username}...`;
           await saveState();
-          await new Promise(r => setTimeout(r, 4000));
+          await new Promise(r => setTimeout(r, 2000));
         } else {
-          currentJob.message = `System error on @${username}`;
-          success = true;
+          currentJob.message = `Skipped @${username} (Timeout/Error)`;
+          success = true; // Move to next
         }
       }
     }
@@ -218,7 +221,7 @@ async function processJob() {
 async function fetchScore(username) {
   try {
     let response = await fetch(`https://twitterscore.io/twitter/${encodeURIComponent(username)}/`, {
-      credentials: 'include',
+      credentials: 'omit',
       headers: {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
       }
@@ -226,13 +229,10 @@ async function fetchScore(username) {
 
     if (!response.ok) {
       if (response.status === 404) return null;
-      if (response.status === 429 || response.status === 403) {
-        throw new Error(`HTTP ${response.status} Challenge`);
-      }
       
       // Fallback to app.sorsa.io
       response = await fetch(`https://app.sorsa.io/profile/${encodeURIComponent(username)}`, {
-        credentials: 'include',
+        credentials: 'omit',
         headers: {
           'x-from': 'extension',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
@@ -241,9 +241,6 @@ async function fetchScore(username) {
       
       if (!response.ok) {
         if (response.status === 404) return null;
-        if (response.status === 429 || response.status === 403) {
-          throw new Error(`HTTP ${response.status} Challenge`);
-        }
         return null;
       }
     }
