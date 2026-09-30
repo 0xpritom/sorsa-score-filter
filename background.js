@@ -24,7 +24,74 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+// Setup dynamic network rules to allow credentials and mask origin
+async function setupDynamicRules() {
+  try {
+    const extOrigin = chrome.runtime.getURL('').replace(/\/$/, '');
+    const rules = [
+      {
+        id: 201,
+        priority: 2,
+        action: {
+          type: 'modifyHeaders',
+          requestHeaders: [
+            { header: 'origin', operation: 'remove' },
+            { header: 'sec-fetch-mode', operation: 'set', value: 'navigate' },
+            { header: 'sec-fetch-dest', operation: 'set', value: 'document' },
+            { header: 'sec-fetch-site', operation: 'set', value: 'same-origin' },
+            { header: 'referer', operation: 'set', value: 'https://twitterscore.io/' }
+          ],
+          responseHeaders: [
+            { header: 'Access-Control-Allow-Origin', operation: 'set', value: extOrigin },
+            { header: 'Access-Control-Allow-Credentials', operation: 'set', value: 'true' },
+            { header: 'Access-Control-Allow-Methods', operation: 'set', value: 'GET, POST, OPTIONS, HEAD' },
+            { header: 'Access-Control-Allow-Headers', operation: 'set', value: '*' }
+          ]
+        },
+        condition: {
+          urlFilter: '*://*.twitterscore.io/*',
+          resourceTypes: ['xmlhttprequest', 'other', 'sub_frame', 'main_frame']
+        }
+      },
+      {
+        id: 202,
+        priority: 2,
+        action: {
+          type: 'modifyHeaders',
+          requestHeaders: [
+            { header: 'origin', operation: 'remove' },
+            { header: 'sec-fetch-mode', operation: 'set', value: 'navigate' },
+            { header: 'sec-fetch-dest', operation: 'set', value: 'document' },
+            { header: 'sec-fetch-site', operation: 'set', value: 'same-origin' },
+            { header: 'referer', operation: 'set', value: 'https://app.sorsa.io/' }
+          ],
+          responseHeaders: [
+            { header: 'Access-Control-Allow-Origin', operation: 'set', value: extOrigin },
+            { header: 'Access-Control-Allow-Credentials', operation: 'set', value: 'true' },
+            { header: 'Access-Control-Allow-Methods', operation: 'set', value: 'GET, POST, OPTIONS, HEAD' },
+            { header: 'Access-Control-Allow-Headers', operation: 'set', value: '*' }
+          ]
+        },
+        condition: {
+          urlFilter: '*://*.sorsa.io/*',
+          resourceTypes: ['xmlhttprequest', 'other', 'sub_frame', 'main_frame']
+        }
+      }
+    ];
+
+    if (chrome.declarativeNetRequest && chrome.declarativeNetRequest.updateDynamicRules) {
+      await chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [201, 202],
+        addRules: rules
+      });
+    }
+  } catch (err) {
+    console.error('Failed to setup dynamic rules:', err);
+  }
+}
+
 chrome.runtime.onStartup.addListener(() => {
+  setupDynamicRules();
   stateLoadedPromise.then(() => {
     if (currentJob.status === 'running' && !isProcessing) {
       processJob();
@@ -33,6 +100,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
+  setupDynamicRules();
   stateLoadedPromise.then(() => {
     if (currentJob.status === 'running' && !isProcessing) {
       processJob();
@@ -42,6 +110,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Wait for state to load before handling any messages
 let stateLoadedPromise = new Promise((resolve) => {
+  setupDynamicRules();
   chrome.storage.local.get(['sorsaJob'], (result) => {
     if (result.sorsaJob) {
       currentJob = result.sorsaJob;
@@ -189,10 +258,10 @@ async function processJob() {
         if (attempts < 2) {
           currentJob.message = `Retrying @${username}...`;
           await saveState();
-          await new Promise(r => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, 1500));
         } else {
-          currentJob.message = `Skipped @${username} (Timeout/Error)`;
-          success = true; // Move to next
+          currentJob.message = `Skipped @${username} (Error)`;
+          success = true;
         }
       }
     }
@@ -221,7 +290,7 @@ async function processJob() {
 async function fetchScore(username) {
   try {
     let response = await fetch(`https://twitterscore.io/twitter/${encodeURIComponent(username)}/`, {
-      credentials: 'omit',
+      credentials: 'include',
       headers: {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
       }
@@ -232,7 +301,7 @@ async function fetchScore(username) {
       
       // Fallback to app.sorsa.io
       response = await fetch(`https://app.sorsa.io/profile/${encodeURIComponent(username)}`, {
-        credentials: 'omit',
+        credentials: 'include',
         headers: {
           'x-from': 'extension',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'

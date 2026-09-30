@@ -12,7 +12,10 @@
         { "header": "referer", "operation": "set", "value": "https://twitterscore.io/" }
       ],
       "responseHeaders": [
-        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" },
+        { "header": "Access-Control-Allow-Credentials", "operation": "set", "value": "true" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, POST, OPTIONS, HEAD" },
+        { "header": "Access-Control-Allow-Headers", "operation": "set", "value": "*" }
       ]
     },
     "condition": {
@@ -33,7 +36,10 @@
         { "header": "referer", "operation": "set", "value": "https://app.sorsa.io/" }
       ],
       "responseHeaders": [
-        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" }
+        { "header": "Access-Control-Allow-Origin", "operation": "set", "value": "*" },
+        { "header": "Access-Control-Allow-Credentials", "operation": "set", "value": "true" },
+        { "header": "Access-Control-Allow-Methods", "operation": "set", "value": "GET, POST, OPTIONS, HEAD" },
+        { "header": "Access-Control-Allow-Headers", "operation": "set", "value": "*" }
       ]
     },
     "condition": {
